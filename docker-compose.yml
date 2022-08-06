@@ -16,6 +16,8 @@ services:
       PGUSER: postgres
       PGPASSWORD: postgres
       POSTGRES_PASSWORD: postgres
+    volumes:
+      - db-data:/data
 
   subscriber:
     build:
@@ -26,3 +28,8 @@ services:
       PGUSER: postgres
       PGPASSWORD: postgres
       POSTGRES_PASSWORD: postgres
+    volumes:
+      - db-data:/data
+
+volumes:
+  db-data:
