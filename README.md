@@ -72,3 +72,15 @@ bench=# SELECT * FROM pg_stat_subscription;
  16403 | bench   | 106 |       | 0/13A48328   | 2022-08-06 06:59:10.65531+00 | 2022-08-06 06:59:10.655399+00 | 0/13A48328     | 2022-08-06 06:59:10.65531+00
 (1 row)
 ```
+
+## Monitor
+
+On the publisher:
+```sh
+docker compose exec publisher bash -c "while true; do psql bench -c 'SELECT *, pg_current_wal_lsn() from pg_replication_slots;'; sleep 1; done"
+```
+
+On the subscriber:
+```sh
+docker compose exec subscriber bash -c "while true; do psql bench -c 'SELECT * from pg_stat_subscription;'; sleep 1; done"
+```
