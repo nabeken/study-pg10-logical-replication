@@ -1,0 +1,28 @@
+services:
+  bench:
+    image: postgres:10.21
+    environment:
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    command: pgbench -h publisher -T 60 bench
+
+  publisher:
+    build:
+      dockerfile: ./Dockerfile
+    #image: postgres:10.21
+    ports:
+      - "5430:5432"
+    environment:
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      POSTGRES_PASSWORD: postgres
+
+  subscriber:
+    build:
+      dockerfile: ./Dockerfile
+    ports:
+      - "5431:5432"
+    environment:
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      POSTGRES_PASSWORD: postgres
