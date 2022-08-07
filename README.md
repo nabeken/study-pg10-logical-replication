@@ -1,5 +1,23 @@
 # Studying the logical replication with PostgreSQL 10
 
+## Setup roles
+
+- `postgres` -- A super user (used for replication and its administrative work)
+- `dbowner` -- A user who owns tables (used for database management)
+- `app` -- A user that an application (pgbench) uses for read and write
+
+**dbowner**:
+```sh
+docker compose exec publisher createuser --login --no-createrole --no-superuser --createdb dbowner
+docker compose exec subscriber createuser --login --no-createrole --no-superuser --createdb dbowner
+```
+
+**app**:
+```sh
+docker compose exec publisher createuser --login --no-createrole --no-superuser --no-createdb --pwprompt app
+docker compose exec subscriber createuser --login --no-createrole --no-superuser --no-createdb --pwprompt app
+```
+
 ## Setup the publisher and subscriber
 
 ```
@@ -11,8 +29,14 @@ docker compose up --build publisher subscriber
 Let's create a database for benchmarking.
 
 ```
-docker compose exec publisher createdb bench
-docker compose exec publisher pgbench  -i -s 10 -q bench
+docker compose exec publisher createdb -U dbowner bench
+docker compose exec publisher pgbench -U dbowner  -i -s 10 -q bench
+
+docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_accounts TO app;" bench
+docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_branches TO app;" bench
+docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_history TO app;" bench
+docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_tellers TO app;" bench
+
 docker compose exec publisher pg_dump --schema-only --create -f /data/bench-schema.sql bench
 ```
 
@@ -83,4 +107,22 @@ docker compose exec publisher bash -c "while true; do psql bench -c 'SELECT *, p
 On the subscriber:
 ```sh
 docker compose exec subscriber bash -c "while true; do psql bench -c 'SELECT * from pg_stat_subscription;'; sleep 1; done"
+```
+
+## Pause write
+
+```sh
+docker compose exec publisher psql -U dbowner -c "REVOKE ALL ON pgbench_accounts FROM app;" bench
+docker compose exec publisher psql -U dbowner -c "REVOKE ALL ON pgbench_branches FROM app;" bench
+docker compose exec publisher psql -U dbowner -c "REVOKE ALL ON pgbench_history FROM app;" bench
+docker compose exec publisher psql -U dbowner -c "REVOKE ALL ON pgbench_tellers FROM app;" bench
+```
+
+## Grant write
+
+```
+docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_accounts TO app;" bench
+docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_branches TO app;" bench
+docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_history TO app;" bench
+docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_tellers TO app;" bench
 ```

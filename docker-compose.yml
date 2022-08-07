@@ -2,9 +2,8 @@ services:
   bench:
     image: postgres:10.21
     environment:
-      PGUSER: postgres
-      PGPASSWORD: postgres
-    command: pgbench -h publisher -T 60 bench
+      PGPASSWORD: app
+    command: pgbench -U app -h publisher -T 60 bench
 
   publisher:
     build:
