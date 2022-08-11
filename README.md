@@ -1,5 +1,12 @@
 # Studying the logical replication with PostgreSQL 10
 
+## Launch the publisher and subscriber
+
+```
+docker compose up --build publisher subscriber subscriber14
+```
+
+
 ## Setup roles
 
 - `postgres` -- A super user (used for replication and its administrative work)
@@ -10,18 +17,14 @@
 ```sh
 docker compose exec publisher createuser --login --no-createrole --no-superuser --createdb dbowner
 docker compose exec subscriber createuser --login --no-createrole --no-superuser --createdb dbowner
+docker compose exec subscriber14 createuser --login --no-createrole --no-superuser --createdb dbowner
 ```
 
 **app**:
 ```sh
-docker compose exec publisher createuser --login --no-createrole --no-superuser --no-createdb --pwprompt app
-docker compose exec subscriber createuser --login --no-createrole --no-superuser --no-createdb --pwprompt app
-```
-
-## Setup the publisher and subscriber
-
-```
-docker compose up --build publisher subscriber
+for h in publisher subscriber subscriber14; do
+  echo app | docker compose exec --no-TTY $h createuser --login --no-createrole --no-superuser --no-createdb --pwprompt app
+done
 ```
 
 ## Setup pgbench
@@ -51,27 +54,37 @@ docker compose up bench
 Replicate the schema on the subscriber:
 ```
 docker compose exec subscriber psql -f /data/bench-schema.sql
+docker compose exec subscriber14 psql -f /data/bench-schema.sql
 ```
 
 Create a publisher on the publisher:
 ```
-docker compose exec publisher psql bench
-
+cat << EOF | docker compose exec --no-TTY publisher psql bench
 CREATE PUBLICATION bench FOR ALL TABLES;
 select * from pg_replication_slots;
 select * from pg_publication;
+EOF
 ```
 
 Create a subscription on the subscriber:
 ```
-docker compose exec subscriber psql bench
-
+cat <<EOF | docker compose exec --no-TTY subscriber psql bench
 CREATE SUBSCRIPTION bench
 CONNECTION 'dbname=bench host=publisher user=postgres password=postgres'
 PUBLICATION bench
 ;
 
 SELECT * FROM pg_stat_subscription;
+EOF
+
+cat <<EOF | docker compose exec --no-TTY subscriber14 psql bench
+CREATE SUBSCRIPTION bench14
+CONNECTION 'dbname=bench host=publisher user=postgres password=postgres'
+PUBLICATION bench
+;
+
+SELECT * FROM pg_stat_subscription;
+EOF
 ```
 
 ## How to confirm the latest WAL is applied to the subscriber?
@@ -107,22 +120,28 @@ docker compose exec publisher bash -c "while true; do psql bench -c 'SELECT *, p
 On the subscriber:
 ```sh
 docker compose exec subscriber bash -c "while true; do psql bench -c 'SELECT * from pg_stat_subscription;'; sleep 1; done"
+
+docker compose exec subscriber14 bash -c "while true; do psql bench -c 'SELECT * from pg_stat_subscription;'; sleep 1; done"
 ```
 
 ## Pause write
 
 ```sh
-docker compose exec publisher psql -U dbowner -c "REVOKE ALL ON pgbench_accounts FROM app;" bench
-docker compose exec publisher psql -U dbowner -c "REVOKE ALL ON pgbench_branches FROM app;" bench
-docker compose exec publisher psql -U dbowner -c "REVOKE ALL ON pgbench_history FROM app;" bench
-docker compose exec publisher psql -U dbowner -c "REVOKE ALL ON pgbench_tellers FROM app;" bench
+cat <<EOF | docker compose exec --no-TTY publisher psql -U postgres
+REVOKE CONNECT ON DATABASE bench FROM PUBLIC;
+
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE
+      pid <> pg_backend_pid()
+  AND usename <> 'postgres' -- skip replication slots
+  AND datname = 'bench'
+;
+EOF
 ```
 
 ## Grant write
 
 ```
-docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_accounts TO app;" bench
-docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_branches TO app;" bench
-docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_history TO app;" bench
-docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_tellers TO app;" bench
+docker compose exec publisher psql -U dbowner -c "GRANT CONNECT ON DATABASE bench TO PUBLIC;" bench
 ```

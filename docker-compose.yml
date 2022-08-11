@@ -30,5 +30,17 @@ services:
     volumes:
       - db-data:/data
 
+  subscriber14:
+    build:
+      dockerfile: ./Dockerfile.pg14
+    ports:
+      - "5432:5432"
+    environment:
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - db-data:/data
+
 volumes:
   db-data:
