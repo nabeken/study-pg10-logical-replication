@@ -6,25 +6,14 @@
 docker compose up --build publisher subscriber subscriber14
 ```
 
-
 ## Setup roles
 
 - `postgres` -- A super user (used for replication and its administrative work)
-- `dbowner` -- A user who owns tables (used for database management)
 - `app` -- A user that an application (pgbench) uses for read and write
-
-**dbowner**:
-```sh
-docker compose exec publisher createuser --login --no-createrole --no-superuser --createdb dbowner
-docker compose exec subscriber createuser --login --no-createrole --no-superuser --createdb dbowner
-docker compose exec subscriber14 createuser --login --no-createrole --no-superuser --createdb dbowner
-```
 
 **app**:
 ```sh
-for h in publisher subscriber subscriber14; do
-  echo app | docker compose exec --no-TTY $h createuser --login --no-createrole --no-superuser --no-createdb --pwprompt app
-done
+docker compose exec publisher createuser --login --no-createrole --no-superuser --no-createdb --pwprompt app
 ```
 
 ## Setup pgbench
@@ -32,37 +21,41 @@ done
 Let's create a database for benchmarking.
 
 ```
-docker compose exec publisher createdb -U dbowner bench
-docker compose exec publisher pgbench -U dbowner  -i -s 10 -q bench
+docker compose exec publisher createdb bench
+docker compose exec publisher pgbench -i -s 10 -q bench
 
-docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_accounts TO app;" bench
-docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_branches TO app;" bench
-docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_history TO app;" bench
-docker compose exec publisher psql -U dbowner -c "GRANT ALL ON pgbench_tellers TO app;" bench
+cat <<EOF | docker compose exec --no-TTY publisher psql bench
+GRANT ALL ON pgbench_accounts TO app;
+GRANT ALL ON pgbench_branches TO app;
+GRANT ALL ON pgbench_history TO app;
+GRANT ALL ON pgbench_tellers TO app;
+EOF
 
 docker compose exec publisher pg_dump --schema-only --create -f /data/bench-schema.sql bench
-```
-
-Then, let's run the bench.
-
-```
-docker compose up bench
+docker compose exec publisher pg_dumpall --roles-only -f /data/roles.sql
 ```
 
 ## Setup the logical replication
 
 Replicate the schema on the subscriber:
 ```
+docker compose exec subscriber psql -f /data/roles.sql
 docker compose exec subscriber psql -f /data/bench-schema.sql
+
+docker compose exec subscriber14 psql -f /data/roles.sql
 docker compose exec subscriber14 psql -f /data/bench-schema.sql
 ```
 
 Create a publisher on the publisher:
 ```
 cat << EOF | docker compose exec --no-TTY publisher psql bench
+ALTER TABLE pgbench_history REPLICA IDENTITY FULL;
+
 CREATE PUBLICATION bench FOR ALL TABLES;
 select * from pg_replication_slots;
 select * from pg_publication;
+ALTER TABLE pgbench_history REPLICA IDENTITY FULL;
+
 EOF
 ```
 
@@ -86,6 +79,14 @@ PUBLICATION bench
 SELECT * FROM pg_stat_subscription;
 EOF
 ```
+
+Then, let's run the bench.
+
+```
+docker compose up bench
+```
+
+Please note that if you run the bench again, `pgbench_history` will be no longer identical across the cluster because `pgbench` issues `truncate` command against the history table, which won't be replicated to subscribers.
 
 ## How to confirm the latest WAL is applied to the subscriber?
 
@@ -120,7 +121,6 @@ docker compose exec publisher bash -c "while true; do psql bench -c 'SELECT *, p
 On the subscriber:
 ```sh
 docker compose exec subscriber bash -c "while true; do psql bench -c 'SELECT * from pg_stat_subscription;'; sleep 1; done"
-
 docker compose exec subscriber14 bash -c "while true; do psql bench -c 'SELECT * from pg_stat_subscription;'; sleep 1; done"
 ```
 
@@ -143,5 +143,5 @@ EOF
 ## Grant write
 
 ```
-docker compose exec publisher psql -U dbowner -c "GRANT CONNECT ON DATABASE bench TO PUBLIC;" bench
+docker compose exec publisher psql -c "GRANT CONNECT ON DATABASE bench TO PUBLIC;" bench
 ```
