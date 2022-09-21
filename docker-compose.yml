@@ -13,8 +13,8 @@ services:
       - "5430:5432"
     environment:
       PGUSER: postgres
-      PGPASSWORD: postgres
-      POSTGRES_PASSWORD: postgres
+      PGPASSWORD: password1
+      POSTGRES_PASSWORD: password1
     volumes:
       - db-data:/data
 
@@ -25,8 +25,8 @@ services:
       - "5431:5432"
     environment:
       PGUSER: postgres
-      PGPASSWORD: postgres
-      POSTGRES_PASSWORD: postgres
+      PGPASSWORD: password2
+      POSTGRES_PASSWORD: password2
     volumes:
       - db-data:/data
 
