@@ -41,6 +41,28 @@ module "ec2-bastion-server" {
 #
 # Create a publisher RDS with PostgreSQL 10
 #
+resource "aws_db_parameter_group" "pg10" {
+  name   = "${var.project_name}-pg10"
+  family = "postgres10"
+
+  parameter {
+    name         = "rds.logical_replication"
+    value        = "1"
+    apply_method = "pending-reboot"
+  }
+}
+
+resource "aws_db_parameter_group" "pg14" {
+  name   = "${var.project_name}-pg14"
+  family = "postgres14"
+
+  parameter {
+    name         = "rds.logical_replication"
+    value        = "1"
+    apply_method = "pending-reboot"
+  }
+}
+
 resource "aws_db_instance" "pg10" {
   engine         = "postgres"
   engine_version = var.pg10_version
@@ -57,7 +79,7 @@ resource "aws_db_instance" "pg10" {
   username = "postgres"
   password = "Lie?th7ees<udooseixi"
 
-  parameter_group_name = "default.postgres10"
+  parameter_group_name = aws_db_parameter_group.pg10.id
   skip_final_snapshot  = true
 }
 
@@ -80,6 +102,6 @@ resource "aws_db_instance" "pg14" {
   username = "postgres"
   password = "Lie?th7ees<udooseixi"
 
-  parameter_group_name = "default.postgres14"
+  parameter_group_name = aws_db_parameter_group.pg14.id
   skip_final_snapshot  = true
 }
