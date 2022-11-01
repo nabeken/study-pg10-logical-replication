@@ -63,7 +63,7 @@ Create a subscription on the subscriber:
 ```
 cat <<EOF | docker compose exec --no-TTY subscriber psql bench
 CREATE SUBSCRIPTION bench
-CONNECTION 'dbname=bench host=publisher user=postgres password=postgres'
+CONNECTION 'dbname=bench host=publisher user=postgres password=password1'
 PUBLICATION bench
 ;
 
@@ -115,7 +115,7 @@ bench=# SELECT * FROM pg_stat_subscription;
 
 On the publisher:
 ```sh
-docker compose exec publisher bash -c "while true; do psql bench -c 'SELECT *, pg_current_wal_lsn() from pg_replication_slots;'; sleep 1; done"
+docker compose exec publisher bash -c "while true; do psql bench -c 'SELECT *, pg_current_wal_lsn() from pg_stat_replication;'; sleep 1; done"
 ```
 
 On the subscriber:
